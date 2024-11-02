@@ -1,11 +1,15 @@
-from functools import cached_property
-from tenacity import retry, stop_after_attempt, wait_fixed
+import logging
+from typing import List
 
 import requests
 from bs4 import BeautifulSoup
+from tenacity import retry, stop_after_attempt, wait_fixed
+
+logger = logging.getLogger(__name__)
 
 
 def get_all_slugs() -> list[str]:
+    """Fetch all product slugs from the catalog"""
     BASE_URL = "https://pellwall.com/collections/ingredients-for-perfumery"
     slugs, page = [], 1
 
@@ -31,12 +35,14 @@ def get_all_slugs() -> list[str]:
     return slugs
 
 
-class Product:
-    _BASE_URL = "https://pellwall.com/products"
+class ProductScraper:
+    """Handles web scraping of product data"""
+
+    BASE_URL = "https://pellwall.com/products"
 
     def __init__(self, slug: str):
         self.slug = slug
-        self.url = f"{self._BASE_URL}/{slug}"
+        self.url = f"{self.BASE_URL}/{slug}"
         self._soup = self._fetch_soup()
 
     @retry(stop=stop_after_attempt(10), wait=wait_fixed(1))
@@ -45,16 +51,33 @@ class Product:
         response.raise_for_status()
         return BeautifulSoup(response.content.decode("utf-8", "ignore"), "html.parser")
 
-    @cached_property
-    def name(self) -> str:
+    def scrape(self) -> dict:
+        """Scrape all product data at once"""
+        try:
+            return {
+                "slug": self.slug,
+                "url": self.url,
+                "name": self._get_name(),
+                "type": self._get_type(),
+                "tags": self._get_tags(),
+                "cas_no": self._get_cas_no(),
+                "odour": self._get_odour(),
+                "solvent": self._get_solvent(),
+                "synonyms": self._get_synonyms(),
+                "manufacturer": self._get_manufacturer(),
+            }
+        except Exception as e:
+            logger.error(f"Failed to scrape product {self.slug}: {e}")
+            raise
+
+    def _get_name(self) -> str:
         return (
             self._soup.find("div", class_="product__title")
             .find("h1")
             .get_text(strip=True)
         )
 
-    @cached_property
-    def type(self) -> str:
+    def _get_type(self) -> str | None:
         product_info_container = self._soup.find(
             "div",
             id="ProductInfo-template--15936675938552__main",
@@ -62,58 +85,54 @@ class Product:
         )
         type_badge = product_info_container.find("div", class_="product-type-badge")
         if not type_badge:
-            return ""
+            return None
         return type_badge.find("a").get_text(strip=True).lower()
 
-    @cached_property
-    def tags(self) -> list[str]:
+    def _get_tags(self) -> List[str] | None:
         product_description = self._soup.find(
             "div", class_="product__description rte quick-add-hidden"
         )
         if not product_description:
-            return []
-        return [
+            return None
+        tags = [
             a["href"].split("/collections/all/")[1]
             for a in product_description.find(
                 "i", class_="fa fa-tags"
             ).find_next_siblings("a")
         ]
+        return tags if tags else None
 
-    @cached_property
-    def cas_no(self) -> list[str]:
+    def _get_cas_no(self) -> List[str]:
         cas_no = self._extract_detail("CAS No.", split=True)
         return cas_no if cas_no and "n/a" not in "".join(cas_no).lower() else None
 
-    @cached_property
-    def odour(self) -> str:
+    def _get_odour(self) -> List[str]:
         odour = self._extract_detail("Odour (decreasing)", split=True, lower=True)
         for i, item in enumerate(odour):
             if "." in item:
                 odour[i] = item.split(".")[0]
                 return odour[: i + 1]
+        return odour
 
-    @cached_property
-    def solvent(self) -> str:
+    def _get_solvent(self) -> str | None:
         solvent_detail = self._extract_detail("Solvent")
         return (
             solvent_detail
             if solvent_detail
             and "none" not in solvent_detail.lower()
             and "n/a" not in solvent_detail.lower()
-            else ""
+            else None
         )
 
-    @cached_property
-    def synonyms(self) -> list[str]:
+    def _get_synonyms(self) -> List[str]:
         return self._extract_detail("Main Synonyms", split=True)
 
-    @cached_property
-    def manufacturer(self) -> str:
+    def _get_manufacturer(self) -> str:
         return self._extract_detail("Manufacturer")
 
     def _extract_detail(
         self, key: str, split: bool = False, lower: bool = False
-    ) -> list[str]:
+    ) -> List[str] | str:
         product_info_container = self._soup.find(
             "div",
             id="ProductInfo-template--15936675938552__main",
@@ -141,17 +160,3 @@ class Product:
                 if item.strip()
             ]
         return raw_details.get(key, "") or ""
-
-    def to_dict(self) -> dict:
-        return {
-            "slug": self.slug,
-            "url": self.url,
-            "name": self.name,
-            "type": self.type,
-            "tags": self.tags,
-            "cas_no": self.cas_no,
-            "odour": self.odour,
-            "solvent": self.solvent,
-            "synonyms": self.synonyms,
-            "manufacturer": self.manufacturer,
-        }
