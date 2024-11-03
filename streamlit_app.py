@@ -15,7 +15,8 @@ with st.popover(label="About", icon="ℹ️"):
         """
         This is a database of perfume ingredients scraped from the [PellWall](https://pellwall.com) website.  
         The database is built using [FastAPI](https://fastapi.tiangolo.com) and [SQLModel](https://sqlmodel.tiangolo.com).  
-        The data is scraped using [Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/bs4/doc/) and [Requests](https://docs.python-requests.org).
+        The data is scraped using [Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/bs4/doc/) and [Requests](https://docs.python-requests.org).  
+        The web app is built using [Streamlit](https://streamlit.io).
         """
     )
 
@@ -25,8 +26,8 @@ def show_catalog():
     response = requests.get(f"{API_URL}/products/")
     response.raise_for_status()
     products = response.json()
-    df = pd.DataFrame(products).sort_values("name")
-    st.dataframe(df.drop(columns="id"), use_container_width=True, hide_index=True)
+    df = pd.DataFrame(products).sort_values("id").set_index("id")
+    st.dataframe(df, use_container_width=True)
 
 
 def show_search(df):
@@ -98,9 +99,7 @@ def show_search(df):
     elif (n_results := search_results.shape[0]) > 50:
         st.warning(f"Too many results ({n_results}), please refine your search")
     else:
-        st.dataframe(
-            search_results.drop(columns="id"), use_container_width=True, hide_index=True
-        )
+        st.dataframe(search_results.drop(columns="id"), use_container_width=True)
         slugs = sorted(search_results["slug"].values)
         for slug, tab in zip(slugs, st.tabs(slugs)):
             response = requests.get(f"{API_URL}/products/{slug}")
