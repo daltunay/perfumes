@@ -55,18 +55,31 @@ def show_search(df):
         )
         option = option_col.radio(
             "Filter type",
-            [any, all],
+            ["Contains any", "Contains all", "Exact match"],
             key="details_option",
             index=0,
-            format_func=lambda x: x.__name__.title(),
             horizontal=True,
+            help=f"- **Contains any**: the product contains any {by_column} in the chosen options  \n"
+            f"- **Contains all**: the product contains all {by_column} in the chosen options  \n"
+            f"- **Exact match**: the product contains only the {by_column} in the chosen options",
         )
         if query:
-            search_results = df[
-                df[by_column].apply(
-                    lambda x: option(q in x for q in query) if x else False
-                )
-            ]
+            if option == "Contains any":
+                search_results = df[
+                    df[by_column].apply(
+                        lambda x: any(q in x for q in query) if x else False
+                    )
+                ]
+            elif option == "Contains all":
+                search_results = df[
+                    df[by_column].apply(
+                        lambda x: all(q in x for q in query) if x else False
+                    )
+                ]
+            else:  # Exact match
+                search_results = df[
+                    df[by_column].apply(lambda x: set(x) == set(query) if x else False)
+                ]
 
     # Text-based columns
     else:
@@ -76,6 +89,8 @@ def show_search(df):
             key="details_option",
             index=0,
             horizontal=True,
+            help=f"- **Exact**: the product {by_column} matches the query exactly  \n"
+            f"- **Contains**: the product {by_column} contains the query",
         )
 
         if match_type == "Exact":

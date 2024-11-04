@@ -1,5 +1,4 @@
 import logging
-from typing import List
 
 import requests
 from bs4 import BeautifulSoup
@@ -88,7 +87,7 @@ class ProductScraper:
             return None
         return type_badge.find("a").get_text(strip=True).lower()
 
-    def _get_tags(self) -> List[str] | None:
+    def _get_tags(self) -> list[str] | None:
         product_description = self._soup.find(
             "div", class_="product__description rte quick-add-hidden"
         )
@@ -102,11 +101,11 @@ class ProductScraper:
         ]
         return tags if tags else None
 
-    def _get_cas_no(self) -> List[str]:
+    def _get_cas_no(self) -> list[str]:
         cas_no = self._extract_detail("CAS No.", split=True)
         return cas_no if cas_no and "n/a" not in "".join(cas_no).lower() else None
 
-    def _get_odour(self) -> List[str]:
+    def _get_odour(self) -> list[str]:
         odour = self._extract_detail("Odour (decreasing)", split=True, lower=True)
         for i, item in enumerate(odour):
             if "." in item:
@@ -124,7 +123,7 @@ class ProductScraper:
             else None
         )
 
-    def _get_synonyms(self) -> List[str]:
+    def _get_synonyms(self) -> list[str]:
         return self._extract_detail("Main Synonyms", split=True)
 
     def _get_manufacturer(self) -> str:
@@ -132,7 +131,7 @@ class ProductScraper:
 
     def _extract_detail(
         self, key: str, split: bool = False, lower: bool = False
-    ) -> List[str] | str:
+    ) -> list[str] | str:
         product_info_container = self._soup.find(
             "div",
             id="ProductInfo-template--15936675938552__main",
